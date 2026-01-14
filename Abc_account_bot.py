@@ -171,26 +171,16 @@ def start_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     username = update.effective_user.username or "未知用户名"
     welcome_msg = f"""
-👋 你好！我是账户管理机器人，可帮你存储/查询各类账户信息～
+👋 你好！我是账户管理机器人，帮你存储 / 查询各类账户信息～
 
-📌 【核心功能&使用指南】
-1. 查看账户列表（管理员）：发送 /list
-2. 添加/更新账户（管理员）：
-   格式：/add 账户标题（Ctrl+Enter换行）账户信息
-   示例：
-   /add 办公邮箱
-   用户名：test@xxx.com
-   密码：123456
-3. 群聊/私聊查询账户：
-   格式：账户标题 @{context.bot.username}
-   示例：办公邮箱 @Abc_account_bot
-4. 查看自己的ID：发送 /myid
-5. 计算功能：直接发送运算表达式（如800+500、10*2+8/2）
+📌【核心功能&使用指南】
+1、/list → 管理员查账户列表
+2、/add 标题 (换行) 信息 → 管理员增改账户
+3、账户标题 @本机器人 → 查询账户
+4、/myid → 查自身 ID
+5、发运算式 → 直接计算
 
-⚠️ 【注意事项】
-• /add、/list 仅管理员可使用，普通用户仅能查询/计算；
-• 添加账户时，务必用Ctrl+Enter换行（不是Enter发送）；
-• 群聊查询需先将机器人权限勾选「读取消息+发送消息」。
+⚠️ 仅限管理员 /add/list | 换行用 Ctrl+Enter | 群聊需开启「读取+发送消息」权限
 
 有任何问题可直接回复消息，我会尽力解答～
     """
