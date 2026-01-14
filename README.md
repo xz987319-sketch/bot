@@ -1,2 +1,2 @@
 # bot
-机器人初版
+first bot 
