@@ -370,9 +370,9 @@ def add_admin(update: Update, context: CallbackContext):
 
     user_id = update.effective_user.id
     username = update.effective_user.username or "未知用户名"
-    # 仅超级管理员可添加管理员
-    if user_id != OWNER_ID:
-        update.message.reply_text("❌ 仅机器人创建者可添加管理员！")
+    # 权限修改：所有管理员均可添加管理员（原规则：仅OWNER_ID可操作）
+    if not is_admin(user_id):
+        update.message.reply_text("❌ 你没有权限执行此操作（仅管理员可添加管理员）")
         logger.warning(f"【/addadmin命令-权限不足】用户：{username}（ID：{user_id}）尝试添加管理员")
         return
 
