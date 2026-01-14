@@ -107,7 +107,6 @@ def init_db():
                       FOREIGN KEY(title) REFERENCES accounts(title))''')
 
         # 插入初始管理员（避免重复插入）
-        c = conn.cursor()
         c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (OWNER_ID,))
 
         conn.commit()
@@ -600,7 +599,7 @@ def calculate_expression(expr):
 
 # -------------------------- 合并消息处理器（计算+@查询） --------------------------
 def unified_message_handler(update: Update, context: CallbackContext):
-    # 记录所有非命令消息
+    # 记录消息
     record_message(update)
 
     user_id = update.effective_user.id
@@ -619,41 +618,31 @@ def unified_message_handler(update: Update, context: CallbackContext):
 
     # 第二步：处理@查询/私聊查询
     bot_username = context.bot.username
-    if f"@{bot_username}" in msg_text:
+    is_at_query = f"@{bot_username}" in msg_text
+    if is_at_query:
         account_title = msg_text.split(f"@{bot_username}")[0].strip()
-    else:
-        account_title = msg_text.strip()
-
-    # 调试日志
-    logger.info(f"【@查询调试】用户：{username}（ID：{user_id}）| 原始消息：{msg_text} | 提取标题：{account_title}")
-
-    # 数据库查询
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT current_content FROM accounts WHERE title = ?", (account_title,))
-        result = cursor.fetchone()
-        conn.close()
-
-        logger.info(f"【@查询调试-结果】用户：{username}（ID：{user_id}）| 账户：{account_title} | 查询结果：{result}")
-
-        # 回复逻辑
-        if result:
-            update.message.reply_text(f"📋 账户「{account_title}」的信息：\n{result[0]}")
-        else:
-            # 提示已有账户列表
+        # 数据库查询
+        try:
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
-            cursor.execute("SELECT title FROM accounts")
-            titles = [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT current_content FROM accounts WHERE title = ?", (account_title,))
+            result = cursor.fetchone()
             conn.close()
-            existing_titles = "、".join(titles) if titles else "无"
-            update.message.reply_text(f"❌ 未找到账户「{account_title}」！\n👉 已有的账户：{existing_titles}")
-            logger.warning(
-                f"【@查询调试-未找到】用户：{username}（ID：{user_id}）| 账户：{account_title} | 已有账户：{existing_titles}")
-    except Exception as e:
-        logger.error(f"【@查询调试-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
-        update.message.reply_text(f"❌ 查询失败：{str(e)}")
+
+            logger.info(f"【@查询调试-结果】用户：{username}（ID：{user_id}）| 账户：{account_title} | 查询结果：{result}")
+
+            # 回复逻辑：有则返回信息，无则提示不存在，无额外列表
+            if result:
+                update.message.reply_text(f"📋 账户「{account_title}」的信息：\n{result[0]}")
+            else:
+                update.message.reply_text(f"❌ 账户「{account_title}」不存在！")
+        except Exception as e:
+            logger.error(f"【@查询调试-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+            update.message.reply_text(f"❌ 查询失败：{str(e)}")
+        return
+
+    # 非计算、非@查询的内容，无任何回复
+    return
 
 
 # -------------------------- 机器人启动入口 --------------------------
