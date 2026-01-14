@@ -453,7 +453,7 @@ def remove_admin(update: Update, context: CallbackContext):
         update.message.reply_text(f"❌ 移除失败：{str(e)}")
 
 
-# 8. 查看管理员列表 (/admins)
+# 8. 查看管理员列表 (/admins) - 核心修改函数
 def list_admins(update: Update, context: CallbackContext):
     # 记录消息
     record_message(update)
@@ -469,21 +469,29 @@ def list_admins(update: Update, context: CallbackContext):
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("SELECT user_id FROM admins ORDER BY user_id")
-        admins = c.fetchall()
+        admin_ids = [row[0] for row in c.fetchall()]
         conn.close()
 
-        if not admins:
+        if not admin_ids:
             update.message.reply_text("👑 暂无管理员！")
             logger.info(f"【/admins命令-无管理员】用户：{username}（ID：{user_id}）查看管理员列表，当前无管理员")
             return
 
+        # 拼接管理员列表：获取用户昵称+ID
         admin_list = "👑 管理员列表：\n"
-        for idx, (admin_id,) in enumerate(admins, 1):
+        for idx, admin_id in enumerate(admin_ids, 1):
+            # 通过bot获取用户信息
+            try:
+                user = context.bot.get_chat(admin_id)
+                user_name = user.username or user.first_name or "未知用户"
+            except Exception:
+                user_name = "未知用户"
             # 标记超级管理员
             tag = "（超级管理员）" if admin_id == OWNER_ID else ""
-            admin_list += f"{idx}. {admin_id} {tag}\n"
+            admin_list += f"{idx}. {user_name}（ID：{admin_id}）{tag}\n"
+
         update.message.reply_text(admin_list)
-        logger.info(f"【/admins命令-成功】用户：{username}（ID：{user_id}）查看管理员列表，共{len(admins)}个管理员")
+        logger.info(f"【/admins命令-成功】用户：{username}（ID：{user_id}）查看管理员列表，共{len(admin_ids)}个管理员")
     except Exception as e:
         logger.error(f"【/admins命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
         update.message.reply_text(f"❌ 查询失败：{str(e)}")
