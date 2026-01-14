@@ -477,18 +477,29 @@ def list_admins(update: Update, context: CallbackContext):
             logger.info(f"【/admins命令-无管理员】用户：{username}（ID：{user_id}）查看管理员列表，当前无管理员")
             return
 
-        # 拼接管理员列表：获取用户昵称+ID
+        # 拼接管理员列表：名字 + 姓氏 + @用户名 + ID + 超级管理员标记
         admin_list = "👑 管理员列表：\n"
         for idx, admin_id in enumerate(admin_ids, 1):
-            # 通过bot获取用户信息
             try:
                 user = context.bot.get_chat(admin_id)
-                user_name = user.username or user.first_name or "未知用户"
+                # 调整姓名顺序：先名字（first_name），后姓氏（last_name）
+                full_name = []
+                if user.first_name:
+                    full_name.append(user.first_name)
+                if user.last_name:
+                    full_name.append(user.last_name)
+                full_name_str = " ".join(full_name) if full_name else "未知姓名"
+
+                # 处理用户名：有则显示@xxx，无则显示“无用户名”
+                username_str = f"@{user.username}" if user.username else "无用户名"
             except Exception:
-                user_name = "未知用户"
-            # 标记超级管理员
+                full_name_str = "未知姓名"
+                username_str = "无用户名"
+
+            # 超级管理员标记
             tag = "（超级管理员）" if admin_id == OWNER_ID else ""
-            admin_list += f"{idx}. {user_name}（ID：{admin_id}）{tag}\n"
+            # 最终格式：序号. 名字 姓氏 @用户名（ID：xxx） 标记
+            admin_list += f"{idx}. {full_name_str} {username_str}（ID：{admin_id}）{tag}\n"
 
         update.message.reply_text(admin_list)
         logger.info(f"【/admins命令-成功】用户：{username}（ID：{user_id}）查看管理员列表，共{len(admin_ids)}个管理员")
