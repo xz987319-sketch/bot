@@ -73,8 +73,7 @@ def setup_logger():
     # 配置日志格式：时间 - 日志级别 - 模块 - 消息
     formatter = logging.Formatter(
         "%(asctime)s - %(levelname)s - %(module)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+        datefmt="%Y-%m-%d %H:%M:%S")
     file_handler.setFormatter(formatter)
 
     # 添加控制台输出处理器（可选，保留控制台打印）
@@ -131,7 +130,8 @@ def init_db():
                       FOREIGN KEY(title) REFERENCES accounts(title))''')
 
         # 插入初始管理员（避免重复插入）
-        c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (OWNER_ID,))
+        c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)",
+                  (OWNER_ID,))
 
         conn.commit()
         conn.close()
@@ -159,7 +159,8 @@ def record_message(update: Update):
     """记录私聊/群聊的消息内容"""
     user = update.effective_user
     chat = update.effective_chat
-    message_text = update.message.text.strip() if update.message.text else "无文本内容"
+    message_text = update.message.text.strip(
+    ) if update.message.text else "无文本内容"
 
     user_info = f"用户：{user.username or user.first_name}（ID：{user.id}）"
 
@@ -172,7 +173,8 @@ def record_message(update: Update):
         chat_info = f"会话类型：群聊 | 群名：{chat.title}（群ID：{chat.id}）"
 
     # 记录日志
-    logger.info(f"【消息记录-{chat_type}】{user_info} | {chat_info} | 消息内容：{message_text}")
+    logger.info(
+        f"【消息记录-{chat_type}】{user_info} | {chat_info} | 消息内容：{message_text}")
 
 
 # -------------------------- 命令处理函数（核心功能） --------------------------
@@ -199,7 +201,8 @@ def myid(update: Update, context: CallbackContext):
 姓名：{full_name}"""
 
     update.message.reply_text(response)
-    logger.info(f"【/myid命令】用户：{user.username or user.first_name}（ID：{user_id}）查询了自身信息")
+    logger.info(
+        f"【/myid命令】用户：{user.username or user.first_name}（ID：{user_id}）查询了自身信息")
 
 
 # 2. 处理/start命令：回复问候语+使用指南
@@ -246,7 +249,8 @@ def add_account(update: Update, context: CallbackContext):
 📌 操作提示：
 1. 输入 "/add 账户1" 后，按【Ctrl+Enter】换行
 2. 换行后输入所有账户信息，最后按Enter发送""")
-        logger.warning(f"【/add命令-格式错误】用户：{username}（ID：{user_id}）输入：{full_text}")
+        logger.warning(
+            f"【/add命令-格式错误】用户：{username}（ID：{user_id}）输入：{full_text}")
         return
 
     # 去掉命令前缀，获取纯内容
@@ -259,7 +263,9 @@ def add_account(update: Update, context: CallbackContext):
 /add 户号1
 用户名：test001
 密码：123456""")
-        logger.warning(f"【/add命令-缺少换行】用户：{username}（ID：{user_id}）输入：{content_after_command}")
+        logger.warning(
+            f"【/add命令-缺少换行】用户：{username}（ID：{user_id}）输入：{content_after_command}"
+        )
         return
 
     # 分割标题和内容（仅第一个换行）
@@ -283,24 +289,32 @@ def add_account(update: Update, context: CallbackContext):
         c = conn.cursor()
 
         # 检查账户是否存在
-        c.execute("SELECT current_content FROM accounts WHERE title=?", (title,))
+        c.execute("SELECT current_content FROM accounts WHERE title=?",
+                  (title,))
         old_content = c.fetchone()
 
         if old_content:
             # 账户存在：保存历史+更新当前内容
-            c.execute("INSERT INTO account_history (title, content) VALUES (?, ?)", (title, old_content[0]))
-            c.execute("UPDATE accounts SET current_content=? WHERE title=?", (account_content, title))
+            c.execute(
+                "INSERT INTO account_history (title, content) VALUES (?, ?)",
+                (title, old_content[0]))
+            c.execute("UPDATE accounts SET current_content=? WHERE title=?",
+                      (account_content, title))
             msg = f"""✅ 账户「{title}」已更新！
 📌 原内容已保存至历史记录，当前内容：
 {account_content}"""
-            logger.info(f"【/add命令-更新账户】用户：{username}（ID：{user_id}）更新账户：{title}")
+            logger.info(
+                f"【/add命令-更新账户】用户：{username}（ID：{user_id}）更新账户：{title}")
         else:
             # 账户不存在：新增
-            c.execute("INSERT INTO accounts (title, current_content) VALUES (?, ?)", (title, account_content))
+            c.execute(
+                "INSERT INTO accounts (title, current_content) VALUES (?, ?)",
+                (title, account_content))
             msg = f"""✅ 账户「{title}」添加成功！
 📌 账户信息：
 {account_content}"""
-            logger.info(f"【/add命令-新增账户】用户：{username}（ID：{user_id}）新增账户：{title}")
+            logger.info(
+                f"【/add命令-新增账户】用户：{username}（ID：{user_id}）新增账户：{title}")
 
         conn.commit()
         conn.close()
@@ -310,7 +324,7 @@ def add_account(update: Update, context: CallbackContext):
         update.message.reply_text(f"❌ 添加失败：{str(e)}")
 
 
-# 4. 删除账户 (/delete 标题)
+# 4. 删除账户 (/delete 标题 或 /delete all)
 def delete_account(update: Update, context: CallbackContext):
     # 记录消息
     record_message(update)
@@ -323,34 +337,62 @@ def delete_account(update: Update, context: CallbackContext):
         return
 
     if not context.args:
-        update.message.reply_text("❌ 格式错误！正确格式：/delete 账户标题")
-        logger.warning(f"【/delete命令-格式错误】用户：{username}（ID：{user_id}）未输入标题")
+        update.message.reply_text(
+            "❌ 格式错误！\n1. 删除单个：/delete 标题\n2. 删除多个：/delete 标题1 标题2\n3. 清空所有：/delete all")
+        logger.warning(f"【/delete命令-格式错误】用户：{username}（ID：{user_id}）未输入参数")
         return
 
-    title = " ".join(context.args).strip()
+    # 情况1：清空所有
+    if len(context.args) == 1 and context.args[0].lower() == "all":
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("DELETE FROM account_history")
+            c.execute("DELETE FROM accounts")
+            conn.commit()
+            conn.close()
+            update.message.reply_text("✅ 已清空所有账户及其历史记录！")
+            logger.info(f"【/delete命令-清空】用户：{username}（ID：{user_id}）清空了所有账户")
+        except Exception as e:
+            logger.error(f"【/delete命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+            update.message.reply_text(f"❌ 清空失败：{str(e)}")
+        return
+
+    # 情况2：删除一个或多个
+    titles = context.args
+    success_titles = []
+    fail_titles = []
+
     try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
+        for title in titles:
+            title = title.strip()
+            # 检查账户是否存在
+            c.execute("SELECT 1 FROM accounts WHERE title=?", (title,))
+            if not c.fetchone():
+                fail_titles.append(title)
+                continue
 
-        # 先检查账户是否存在
-        c.execute("SELECT 1 FROM accounts WHERE title=?", (title,))
-        if not c.fetchone():
-            conn.close()
-            update.message.reply_text(f"❌ 账户「{title}」不存在！")
-            logger.warning(f"【/delete命令-账户不存在】用户：{username}（ID：{user_id}）尝试删除：{title}")
-            return
-
-        # 级联删除：先删历史记录，再删账户
-        c.execute("DELETE FROM account_history WHERE title=?", (title,))
-        c.execute("DELETE FROM accounts WHERE title=?", (title,))
+            # 级联删除
+            c.execute("DELETE FROM account_history WHERE title=?", (title,))
+            c.execute("DELETE FROM accounts WHERE title=?", (title,))
+            success_titles.append(title)
 
         conn.commit()
         conn.close()
-        update.message.reply_text(f"✅ 账户「{title}」已删除（含历史记录）！")
-        logger.info(f"【/delete命令-成功】用户：{username}（ID：{user_id}）删除账户：{title}")
+
+        msg = ""
+        if success_titles:
+            msg += f"✅ 成功删除：{', '.join(success_titles)}\n"
+        if fail_titles:
+            msg += f"❌ 未找到：{', '.join(fail_titles)}"
+
+        update.message.reply_text(msg.strip())
+        logger.info(f"【/delete命令-批量】用户：{username}（ID：{user_id}）删除了：{success_titles}，失败：{fail_titles}")
     except Exception as e:
         logger.error(f"【/delete命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
-        update.message.reply_text(f"❌ 删除失败：{str(e)}")
+        update.message.reply_text(f"❌ 删除过程中出错：{str(e)}")
 
 
 # 5. 列出所有账户 (/list)
@@ -375,7 +417,8 @@ def list_accounts(update: Update, context: CallbackContext):
 
         if not accounts:
             update.message.reply_text("📜 暂无任何账户信息！")
-            logger.info(f"【/list命令-无账户】用户：{username}（ID：{user_id}）查看账户列表，当前无账户")
+            logger.info(
+                f"【/list命令-无账户】用户：{username}（ID：{user_id}）查看账户列表，当前无账户")
             return
 
         # 拼接账户列表
@@ -383,9 +426,12 @@ def list_accounts(update: Update, context: CallbackContext):
         for idx, (title,) in enumerate(accounts, 1):
             account_list += f"{idx}. {title}\n"
         update.message.reply_text(account_list)
-        logger.info(f"【/list命令-成功】用户：{username}（ID：{user_id}）查看账户列表，共{len(accounts)}个账户")
+        logger.info(
+            f"【/list命令-成功】用户：{username}（ID：{user_id}）查看账户列表，共{len(accounts)}个账户"
+        )
     except Exception as e:
-        logger.error(f"【/list命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+        logger.error(
+            f"【/list命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
         update.message.reply_text(f"❌ 查询失败：{str(e)}")
 
 
@@ -404,7 +450,8 @@ def add_admin(update: Update, context: CallbackContext):
 
     if not context.args:
         update.message.reply_text("❌ 格式错误！正确格式：/addadmin 管理员ID")
-        logger.warning(f"【/addadmin命令-格式错误】用户：{username}（ID：{user_id}）未输入管理员ID")
+        logger.warning(
+            f"【/addadmin命令-格式错误】用户：{username}（ID：{user_id}）未输入管理员ID")
         return
 
     try:
@@ -413,22 +460,29 @@ def add_admin(update: Update, context: CallbackContext):
         c = conn.cursor()
 
         # 避免重复添加
-        c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)", (admin_id,))
+        c.execute("INSERT OR IGNORE INTO admins (user_id) VALUES (?)",
+                  (admin_id,))
         if c.rowcount == 0:
             msg = f"❌ ID「{admin_id}」已是管理员！"
-            logger.warning(f"【/addadmin命令-重复添加】用户：{username}（ID：{user_id}）尝试添加：{admin_id}")
+            logger.warning(
+                f"【/addadmin命令-重复添加】用户：{username}（ID：{user_id}）尝试添加：{admin_id}"
+            )
         else:
             msg = f"✅ 管理员「{admin_id}」添加成功！"
-            logger.info(f"【/addadmin命令-成功】用户：{username}（ID：{user_id}）添加管理员：{admin_id}")
+            logger.info(
+                f"【/addadmin命令-成功】用户：{username}（ID：{user_id}）添加管理员：{admin_id}")
 
         conn.commit()
         conn.close()
         update.message.reply_text(msg)
     except ValueError:
         update.message.reply_text("❌ 管理员ID必须是数字！")
-        logger.warning(f"【/addadmin命令-格式错误】用户：{username}（ID：{user_id}）输入非数字ID：{context.args[0]}")
+        logger.warning(
+            f"【/addadmin命令-格式错误】用户：{username}（ID：{user_id}）输入非数字ID：{context.args[0]}"
+        )
     except Exception as e:
-        logger.error(f"【/addadmin命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+        logger.error(
+            f"【/addadmin命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
         update.message.reply_text(f"❌ 添加失败：{str(e)}")
 
 
@@ -441,12 +495,14 @@ def remove_admin(update: Update, context: CallbackContext):
     username = update.effective_user.username or "未知用户名"
     if user_id != OWNER_ID:
         update.message.reply_text("❌ 仅机器人创建者可移除管理员！")
-        logger.warning(f"【/removeadmin命令-权限不足】用户：{username}（ID：{user_id}）尝试移除管理员")
+        logger.warning(
+            f"【/removeadmin命令-权限不足】用户：{username}（ID：{user_id}）尝试移除管理员")
         return
 
     if not context.args:
         update.message.reply_text("❌ 格式错误！正确格式：/removeadmin 管理员ID")
-        logger.warning(f"【/removeadmin命令-格式错误】用户：{username}（ID：{user_id}）未输入管理员ID")
+        logger.warning(
+            f"【/removeadmin命令-格式错误】用户：{username}（ID：{user_id}）未输入管理员ID")
         return
 
     try:
@@ -454,7 +510,8 @@ def remove_admin(update: Update, context: CallbackContext):
         # 禁止移除超级管理员
         if admin_id == OWNER_ID:
             update.message.reply_text("❌ 无法移除超级管理员（机器人创建者）！")
-            logger.warning(f"【/removeadmin命令-禁止操作】用户：{username}（ID：{user_id}）尝试移除超级管理员")
+            logger.warning(
+                f"【/removeadmin命令-禁止操作】用户：{username}（ID：{user_id}）尝试移除超级管理员")
             return
 
         conn = sqlite3.connect(DB_FILE)
@@ -463,19 +520,26 @@ def remove_admin(update: Update, context: CallbackContext):
 
         if c.rowcount == 0:
             msg = f"❌ ID「{admin_id}」不是管理员！"
-            logger.warning(f"【/removeadmin命令-非管理员】用户：{username}（ID：{user_id}）尝试移除：{admin_id}")
+            logger.warning(
+                f"【/removeadmin命令-非管理员】用户：{username}（ID：{user_id}）尝试移除：{admin_id}"
+            )
         else:
             msg = f"✅ 管理员「{admin_id}」移除成功！"
-            logger.info(f"【/removeadmin命令-成功】用户：{username}（ID：{user_id}）移除管理员：{admin_id}")
+            logger.info(
+                f"【/removeadmin命令-成功】用户：{username}（ID：{user_id}）移除管理员：{admin_id}"
+            )
 
         conn.commit()
         conn.close()
         update.message.reply_text(msg)
     except ValueError:
         update.message.reply_text("❌ 管理员ID必须是数字！")
-        logger.warning(f"【/removeadmin命令-格式错误】用户：{username}（ID：{user_id}）输入非数字ID：{context.args[0]}")
+        logger.warning(
+            f"【/removeadmin命令-格式错误】用户：{username}（ID：{user_id}）输入非数字ID：{context.args[0]}"
+        )
     except Exception as e:
-        logger.error(f"【/removeadmin命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+        logger.error(
+            f"【/removeadmin命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
         update.message.reply_text(f"❌ 移除失败：{str(e)}")
 
 
@@ -500,7 +564,8 @@ def list_admins(update: Update, context: CallbackContext):
 
         if not admin_ids:
             update.message.reply_text("👑 暂无管理员！")
-            logger.info(f"【/admins命令-无管理员】用户：{username}（ID：{user_id}）查看管理员列表，当前无管理员")
+            logger.info(
+                f"【/admins命令-无管理员】用户：{username}（ID：{user_id}）查看管理员列表，当前无管理员")
             return
 
         # 拼接管理员列表：名字 + 姓氏 + @用户名 + ID + 超级管理员标记
@@ -528,9 +593,12 @@ def list_admins(update: Update, context: CallbackContext):
             admin_list += f"{idx}. {full_name_str} {username_str}（ID：{admin_id}）{tag}\n"
 
         update.message.reply_text(admin_list)
-        logger.info(f"【/admins命令-成功】用户：{username}（ID：{user_id}）查看管理员列表，共{len(admin_ids)}个管理员")
+        logger.info(
+            f"【/admins命令-成功】用户：{username}（ID：{user_id}）查看管理员列表，共{len(admin_ids)}个管理员"
+        )
     except Exception as e:
-        logger.error(f"【/admins命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+        logger.error(
+            f"【/admins命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
         update.message.reply_text(f"❌ 查询失败：{str(e)}")
 
 
@@ -561,81 +629,90 @@ def view_history(update: Update, context: CallbackContext):
         if not c.fetchone():
             conn.close()
             update.message.reply_text(f"❌ 账户「{title}」不存在！")
-            logger.warning(f"【/history命令-账户不存在】用户：{username}（ID：{user_id}）尝试查看：{title}")
+            logger.warning(
+                f"【/history命令-账户不存在】用户：{username}（ID：{user_id}）尝试查询：{title}")
             return
 
-        # 倒序查询历史记录
-        c.execute('''SELECT content, create_time FROM account_history 
+        # 查询历史记录（按时间降序）
+        c.execute(
+            '''SELECT content, create_time FROM account_history 
                      WHERE title=? ORDER BY create_time DESC''', (title,))
         history = c.fetchall()
         conn.close()
 
         if not history:
-            update.message.reply_text(f"📜 账户「{title}」暂无历史记录！")
-            logger.info(f"【/history命令-无记录】用户：{username}（ID：{user_id}）查看：{title}")
+            update.message.reply_text(f"📜 账户「{title}」暂无历史修改记录。")
+            logger.info(
+                f"【/history命令-无记录】用户：{username}（ID：{user_id}）查询账户：{title}")
             return
 
-        # 拼接历史记录（最多显示最近10条）
-        msg = f"📜 账户「{title}」的历史记录（最近10条）：\n"
-        for idx, (content, create_time) in enumerate(history[:10], 1):
-            msg += f"----------\n{idx}. 时间：{create_time}\n内容：\n{content}\n"
+        msg = f"📜 账户「{title}」的历史记录（共{len(history)}条）：\n"
+        for idx, (content, create_time) in enumerate(history, 1):
+            msg += f"\n--- 记录 {idx} ({create_time}) ---\n{content}\n"
 
         update.message.reply_text(msg)
-        logger.info(f"【/history命令-成功】用户：{username}（ID：{user_id}）查看：{title}")
+        logger.info(
+            f"【/history命令-成功】用户：{username}（ID：{user_id}）查询账户：{title}，共{len(history)}条"
+        )
     except Exception as e:
-        logger.error(f"【/history命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
-        update.message.reply_text(f"❌ 查询失败：{str(e)}")
+        logger.error(
+            f"【/history命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+        update.message.reply_text(f"❌ 查询历史失败：{str(e)}")
 
 
-# 10. 处理账户查询（模糊匹配或精准查询）
+# 10. 处理账户查询和数学运算
 def handle_query(update: Update, context: CallbackContext):
     # 记录消息
     record_message(update)
 
     message_text = update.message.text.strip()
-    user_id = update.effective_user.id
-    username = update.effective_user.username or "未知用户名"
-
-    # 获取本机器人的用户名
     bot_username = context.bot.username
 
-    # 判断是否为查询指令：格式为“账户标题 @本机器人用户名”
+    # ----------------- 场景1：账户查询 -----------------
+    # 判断是否为账户查询：@机器人 户号
     if f"@{bot_username}" in message_text:
-        # 提取标题（去掉 @username 部分）
-        title = message_text.split(f"@{bot_username}")[0].strip()
+        # 去掉@机器人前缀，提取户号
+        title = message_text.replace(f"@{bot_username}", "").strip()
 
         if not title:
-            update.message.reply_text("❓ 请输入要查询的账户标题，例如：台12 @本机器人")
             return
 
         try:
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
-            c.execute("SELECT current_content FROM accounts WHERE title=?", (title,))
+            c.execute("SELECT current_content FROM accounts WHERE title=?",
+                      (title,))
             result = c.fetchone()
             conn.close()
 
             if result:
-                response = f"📋 账户「{title}」的信息如下：\n{result[0]}"
-                update.message.reply_text(response)
-                logger.info(f"【账户查询-成功】用户：{username}（ID：{user_id}）查询：{title}")
+                response = f"🔍 查询成功！账户「{title}」信息如下：\n\n{result[0]}"
+                logger.info(f"【账户查询-命中】标题：{title}")
             else:
-                update.message.reply_text(f"❌ 未找到账户「{title}」的信息！")
-                logger.warning(f"【账户查询-失败】用户：{username}（ID：{user_id}）查询：{title}")
+                response = f"❌ 未找到账户「{title}」的信息，请核对户号是否正确。"
+                logger.info(f"【账户查询-未命中】标题：{title}")
+
+            update.message.reply_text(response)
         except Exception as e:
-            logger.error(f"【账户查询-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
-            update.message.reply_text(f"❌ 查询异常：{str(e)}")
+            logger.error(f"【账户查询-数据库错误】查询内容：{title} | 错误：{str(e)}")
+            update.message.reply_text("❌ 查询过程中出现系统错误，请稍后再试。")
         return
 
-    # 11. 处理计算功能 (仅在私聊或明确是数学表达式时)
-    # 允许的字符：数字, +, -, *, /, (, ), ., 空格
-    if re.match(r'^[0-9+\-*/().\s×xX]+$', message_text) and re.search(r'\d', message_text):
+    # ----------------- 场景2：数学运算 -----------------
+    # 正则表达式匹配简单的算式（数字、运算符、括号）
+    # 支持：+ - * / ( ) . 以及乘号的多种变体 × x X
+    calc_pattern = r'^[\d\+\-\*\/\(\)\.\s×xX]+$'
+
+    if re.match(calc_pattern, message_text):
         try:
-            # 预处理
-            processed = message_text.replace('×', '*').replace('x', '*').replace('X', '*')
-            # 安全计算
-            result = eval(processed, {"__builtins__": None}, {})
-            # 格式化
+            # 预处理：将中文乘号/字母x替换为Python识别的*
+            processed_expr = message_text.replace('×', '*').replace('x', '*').replace('X', '*')
+
+            # 安全执行数学运算（使用ast.literal_eval虽然安全但不支持算式，此处用eval但配合严格正则过滤）
+            # 注意：此正则已严格限制仅允许数学符号，降低了注入风险
+            result = eval(processed_expr, {"__builtins__": None}, {})
+
+            # 格式化结果：如果是浮点数则保留4位小数，整数则转为整型
             if isinstance(result, float):
                 if result.is_integer():
                     result = int(result)
@@ -671,7 +748,8 @@ def main():
     dp.add_handler(CommandHandler("history", view_history))
 
     # 5. 注册消息处理器：处理查询和计算
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_query))
+    dp.add_handler(
+        MessageHandler(Filters.text & ~Filters.command, handle_query))
 
     # 6. 启动机器人
     logger.info("【机器人启动】账户管理机器人已成功启动...")
