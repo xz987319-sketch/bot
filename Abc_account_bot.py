@@ -8,6 +8,30 @@ import os
 from datetime import datetime
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from flask import Flask
+from threading import Thread
+
+# ===================== Flask 保活服务 =====================
+app = Flask('')
+
+
+@app.route('/')
+def home():
+    return "I'm alive"
+
+
+def run_flask():
+    port = int(os.environ.get('PORT', 5000))
+    try:
+        app.run(host='0.0.0.0', port=port)
+    except Exception as e:
+        print(f"Flask 启动失败: {e}")
+
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
 
 
 # ===================== 日志配置（按日期命名，保留90天） =====================
@@ -157,10 +181,25 @@ def myid(update: Update, context: CallbackContext):
     # 记录消息
     record_message(update)
 
-    user_id = update.effective_user.id
-    username = update.effective_user.username or "未知用户名"
-    update.message.reply_text(f"你的用户ID是：{user_id}")
-    logger.info(f"【/myid命令】用户：{username}（ID：{user_id}）查询了自身ID")
+    user = update.effective_user
+    user_id = user.id
+    username = f"@{user.username}" if user.username else "无"
+
+    # 姓名按照(名字+姓氏)顺序展示
+    full_name_parts = []
+    if user.first_name:
+        full_name_parts.append(user.first_name)
+    if user.last_name:
+        full_name_parts.append(user.last_name)
+    full_name = " ".join(full_name_parts) if full_name_parts else "无"
+
+    response = f"""您的信息是：
+用户ID：{user_id}
+用户名：{username}
+姓名：{full_name}"""
+
+    update.message.reply_text(response)
+    logger.info(f"【/myid命令】用户：{user.username or user.first_name}（ID：{user_id}）查询了自身信息")
 
 
 # 2. 处理/start命令：回复问候语+使用指南
@@ -170,20 +209,16 @@ def start_command(update: Update, context: CallbackContext):
 
     user_id = update.effective_user.id
     username = update.effective_user.username or "未知用户名"
-    welcome_msg = f"""
-👋 你好！我是账户管理机器人，帮你存储 / 查询各类账户信息～
+    welcome_msg = f"""👋 你好！我是账户管理机器人，帮你查询各类账户信息～
 
 📌【核心功能&使用指南】
-1、/list → 管理员查账户列表
-2、/add 标题 (换行) 信息 → 管理员增改账户
-3、账户标题 @本机器人 → 查询账户
-4、/myid → 查自身 ID
-5、发运算式 → 直接计算
+1、在群里@我并输入户号 → 查询账户
+2、/myid → 查自身 ID
+3、发运算式 → 直接计算
 
-⚠️ 仅限管理员 /add/list | 换行用 Ctrl+Enter | 群聊需开启「读取+发送消息」权限
+⚠️ 群聊需开启「读取+发送消息」权限
 
-有任何问题可直接回复消息，我会尽力解答～
-    """
+有任何问题可直接回复消息，我会尽力解答～"""
     update.message.reply_text(welcome_msg)
     logger.info(f"【/start命令】用户：{username}（ID：{user_id}）启动了机器人")
 
@@ -536,136 +571,96 @@ def view_history(update: Update, context: CallbackContext):
 
         if not history:
             update.message.reply_text(f"📜 账户「{title}」暂无历史记录！")
-            logger.info(f"【/history命令-无历史】用户：{username}（ID：{user_id}）查看账户：{title} 历史记录，当前无记录")
+            logger.info(f"【/history命令-无记录】用户：{username}（ID：{user_id}）查看：{title}")
             return
 
-        # 拼接历史记录
-        history_text = f"📜 账户「{title}」历史记录（倒序）：\n"
-        for idx, (content, create_time) in enumerate(history, 1):
-            history_text += f"\n{idx}. 记录时间：{create_time}\n内容：{content}\n"
-        update.message.reply_text(history_text)
-        logger.info(f"【/history命令-成功】用户：{username}（ID：{user_id}）查看账户：{title} 历史记录，共{len(history)}条")
+        # 拼接历史记录（最多显示最近10条）
+        msg = f"📜 账户「{title}」的历史记录（最近10条）：\n"
+        for idx, (content, create_time) in enumerate(history[:10], 1):
+            msg += f"----------\n{idx}. 时间：{create_time}\n内容：\n{content}\n"
+
+        update.message.reply_text(msg)
+        logger.info(f"【/history命令-成功】用户：{username}（ID：{user_id}）查看：{title}")
     except Exception as e:
         logger.error(f"【/history命令-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
         update.message.reply_text(f"❌ 查询失败：{str(e)}")
 
 
-# -------------------------- 计算功能核心函数（带调试日志） --------------------------
-# 校验输入是否为合法的运算表达式
-def is_valid_calculation(expr):
-    # 包含@则直接判定为非运算表达式
-    if '@' in expr:
-        logger.debug(f"【计算调试-校验失败】表达式含@符号：{expr}")
-        return False
-    # 仅允许数字、+-*/、括号、小数点、空格
-    valid_chars = r'^[\d\+\-\*\/\(\)\.\s]+$'
-    if not re.match(valid_chars, expr):
-        logger.warning(f"【计算调试-校验失败】表达式含非法字符：{expr}")
-        return False
-    # 必须包含至少一个运算符号
-    if not any(op in expr for op in ['+', '-', '*', '/']):
-        logger.warning(f"【计算调试-校验失败】表达式无运算符号：{expr}")
-        return False
-    logger.info(f"【计算调试-校验成功】表达式合法：{expr}")
-    return True
-
-
-# 安全计算表达式（支持运算优先级，带调试日志）
-def calculate_expression(expr):
-    try:
-        # 调试日志：原始输入表达式
-        logger.info(f"【计算调试-原始输入】：{expr}")
-
-        expr_clean = expr.replace(' ', '')
-        # 调试日志：处理后（去除空格）的表达式
-        logger.info(f"【计算调试-处理后表达式】：{expr_clean}")
-
-        # 安全解析表达式，防止恶意代码
-        ast.parse(expr_clean, mode='eval')
-        result = eval(expr_clean)
-
-        # 处理浮点数转整数（如15.0→15）
-        if isinstance(result, float) and result.is_integer():
-            result = int(result)
-
-        # 调试日志：计算结果
-        logger.info(f"【计算调试-最终结果】：{expr} = {result}")
-
-        return f"✅ 计算结果：\n{expr} = {result}"
-    except ZeroDivisionError:
-        error_msg = "❌ 计算错误：除数不能为0！"
-        logger.error(f"【计算调试-错误】{error_msg} | 表达式：{expr}")
-        return error_msg
-    except SyntaxError:
-        error_msg = "❌ 计算错误：表达式格式不合法（如缺少操作数、括号不匹配等）！"
-        logger.error(f"【计算调试-错误】{error_msg} | 表达式：{expr}")
-        return error_msg
-    except Exception as e:
-        error_msg = f"❌ 计算失败：{str(e)}"
-        logger.error(f"【计算调试-异常】{error_msg} | 表达式：{expr}")
-        return error_msg
-
-
-# -------------------------- 合并消息处理器（计算+@查询） --------------------------
-def unified_message_handler(update: Update, context: CallbackContext):
+# 10. 处理账户查询（模糊匹配或精准查询）
+def handle_query(update: Update, context: CallbackContext):
     # 记录消息
     record_message(update)
 
+    message_text = update.message.text.strip()
     user_id = update.effective_user.id
     username = update.effective_user.username or "未知用户名"
-    msg_text = update.message.text.strip()
 
-    # 跳过命令消息（交给命令处理器）
-    if msg_text.startswith('/'):
-        return
-
-    # 第一步：处理计算功能（优先）
-    if is_valid_calculation(msg_text):
-        reply_msg = calculate_expression(msg_text)
-        update.message.reply_text(reply_msg)
-        return
-
-    # 第二步：处理@查询/私聊查询
+    # 获取本机器人的用户名
     bot_username = context.bot.username
-    is_at_query = f"@{bot_username}" in msg_text
-    if is_at_query:
-        account_title = msg_text.split(f"@{bot_username}")[0].strip()
-        # 数据库查询
+
+    # 判断是否为查询指令：格式为“账户标题 @本机器人用户名”
+    if f"@{bot_username}" in message_text:
+        # 提取标题（去掉 @username 部分）
+        title = message_text.split(f"@{bot_username}")[0].strip()
+
+        if not title:
+            update.message.reply_text("❓ 请输入要查询的账户标题，例如：台12 @本机器人")
+            return
+
         try:
             conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute("SELECT current_content FROM accounts WHERE title = ?", (account_title,))
-            result = cursor.fetchone()
+            c = conn.cursor()
+            c.execute("SELECT current_content FROM accounts WHERE title=?", (title,))
+            result = c.fetchone()
             conn.close()
 
-            logger.info(f"【@查询调试-结果】用户：{username}（ID：{user_id}）| 账户：{account_title} | 查询结果：{result}")
-
-            # 回复逻辑：有则返回信息，无则提示不存在，无额外列表
             if result:
-                update.message.reply_text(f"📋 账户「{account_title}」的信息：\n{result[0]}")
+                response = f"📋 账户「{title}」的信息如下：\n{result[0]}"
+                update.message.reply_text(response)
+                logger.info(f"【账户查询-成功】用户：{username}（ID：{user_id}）查询：{title}")
             else:
-                update.message.reply_text(f"❌ 账户「{account_title}」不存在！")
+                update.message.reply_text(f"❌ 未找到账户「{title}」的信息！")
+                logger.warning(f"【账户查询-失败】用户：{username}（ID：{user_id}）查询：{title}")
         except Exception as e:
-            logger.error(f"【@查询调试-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
-            update.message.reply_text(f"❌ 查询失败：{str(e)}")
+            logger.error(f"【账户查询-数据库错误】用户：{username}（ID：{user_id}）| 错误：{str(e)}")
+            update.message.reply_text(f"❌ 查询异常：{str(e)}")
         return
 
-    # 非计算、非@查询的内容，无任何回复
-    return
+    # 11. 处理计算功能 (仅在私聊或明确是数学表达式时)
+    # 允许的字符：数字, +, -, *, /, (, ), ., 空格
+    if re.match(r'^[0-9+\-*/().\s×xX]+$', message_text) and re.search(r'\d', message_text):
+        try:
+            # 预处理
+            processed = message_text.replace('×', '*').replace('x', '*').replace('X', '*')
+            # 安全计算
+            result = eval(processed, {"__builtins__": None}, {})
+            # 格式化
+            if isinstance(result, float):
+                if result.is_integer():
+                    result = int(result)
+                else:
+                    result = round(result, 4)
+            update.message.reply_text(f"🔢 计算结果：\n{message_text} = {result}")
+            logger.info(f"【计算功能-成功】内容：{message_text} | 结果：{result}")
+        except:
+            pass
 
 
-# -------------------------- 机器人启动入口 --------------------------
+# -------------------------- 机器人启动函数 --------------------------
 def main():
-    # 初始化数据库
+    # 1. 初始化数据库
     init_db()
 
-    # 创建Updater和Dispatcher
+    # 2. 启动保活服务
+    keep_alive()
+
+    # 3. 创建 Updater 对象
     updater = Updater(BOT_TOKEN)
     dp = updater.dispatcher
 
-    # 注册所有命令处理器
-    dp.add_handler(CommandHandler("start", start_command))
+    # 4. 注册命令处理器
     dp.add_handler(CommandHandler("myid", myid))
+    dp.add_handler(CommandHandler("start", start_command))
     dp.add_handler(CommandHandler("add", add_account))
     dp.add_handler(CommandHandler("delete", delete_account))
     dp.add_handler(CommandHandler("list", list_accounts))
@@ -674,12 +669,15 @@ def main():
     dp.add_handler(CommandHandler("admins", list_admins))
     dp.add_handler(CommandHandler("history", view_history))
 
-    # 注册合并后的消息处理器（计算+@查询）
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, unified_message_handler))
+    # 5. 注册消息处理器：处理查询和计算
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_query))
 
-    # 启动机器人
-    logger.info("【机器人启动】账户管理机器人已成功启动，按Ctrl+C停止...")
-    print("机器人已启动，按Ctrl+C停止...")
+    # 6. 启动机器人
+    logger.info("【机器人启动】账户管理机器人已成功启动...")
+
+    # 清理旧 webhook
+    updater.bot.delete_webhook()
+
     updater.start_polling()
     updater.idle()
 
