@@ -368,7 +368,8 @@ def list_accounts(update: Update, context: CallbackContext):
     try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
-        c.execute("SELECT title FROM accounts ORDER BY title")
+        # 按照添加顺序（SQLite默认主键递增顺序或ROWID）
+        c.execute("SELECT title FROM accounts ORDER BY ROWID")
         accounts = c.fetchall()
         conn.close()
 
